@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" type="text/css" href="themes/default/easyui.css">
+    <link rel="stylesheet" type="text/css" href="themes/icon.css">
+    <script src="js/jquery-3.5.1.js"></script>
+    <script src="js/jquery.easyui.min.js"></script>
+</head>
+<body class="easyui-layout">
+<div data-options="region:'north',border:false" style="height:60px;padding:10px;font-size: 20px">
+    CefSharp Request Intercept Demo
+</div>
+<div data-options="region:'west',split:true,title:'Request'" style="width:350px;padding:10px;">
+    <div style="margin-top: 10px">
+        <input id="schemaList"/>
+    </div>
+    <div id='btnAddImgDiv' style="margin-top: 10px">
+        <input id="btnAddImg"/>
+    </div>
+    <div style="margin-top: 10px">
+        <a id="schemaInvoke"></a>
+    </div>
+</div>
+<div data-options="region:'south'" style="height:250px;padding:10px;">
+    <input id="consoleOutput" type="text">
+</div>
+<div data-options="region:'center',title:'Params'">
+    <div id="paramList">
+
+    </div>
+</div>
+
+<script src="js/common.js"></script>
+<script src="js/native-request-callback.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $('#consoleOutput').textbox({
+            multiline: true,
+            height: '100%',
+            width: '100%',
+            labelPosition: 'top',
+            label: 'ConsoleOutput',
+        });
+
+        $('#schemaList').combobox({
+            data: schemaList,
+            valueField: 'name',
+            textField: 'name',
+            width: '100%',
+            label: 'Request Type',
+            labelWidth: '100px',
+            onSelect: function (record) {
+                consoleOutput(`Chose a schema: ${record.name}(${record.desc})`);
+                schemaListSelected(record);
+            }
+        });
+
+        $('#btnAddImg').filebox({
+            width: '100%',
+        });
+
+        $('#btnAddImgDiv').hide();
+
+        $('#schemaInvoke').linkbutton({
+            text: 'Invoke',
+            width: '100%',
+            onClick: function () {
+                schemaInvokeClick();
+            }
+        })
+
+        consoleOutput('Page loaded!');
+    });
+
+    function schemaListSelected(schemaList) {
+        if (schemaList.name.indexOf('Img') !== -1) {
+            $('#btnAddImgDiv').show();
+        } else {
+            $('#btnAddImgDiv').hide();
+        }
+        setParamInputToParamList(schemaList);
+    }
+
+    function setParamInputToParamList(schema) {
+        let $paramList = $('#paramList');
+        $paramList.children().remove();
+        if (!schema.paramDefines) {
+            consoleOutput('This Request Type dose not have required params');
+            return;
+        }
+        let schemaName = schema.name;
+        let paramDefines = schema.paramDefines;
+        paramDefines.forEach(paramDef => {
+            let $inputDiv = $('<div style="margin-top: 10px;padding: 0 10px 0 10px"></div>');
+            let $paramInput = $(`<input id="${schemaName}_${paramDef.name}" style="width: 100%;"/>`);
+            $inputDiv.append($paramInput);
+            $paramList.append($inputDiv);
+            let defValues = paramDef.defineValues;
+            if (defValues) {
+                $paramInput.combobox({
+                    data: defValues,
+                    valueField: 'name',
+                    textField: 'name',
+                    prompt: paramDef.desc,
+                    label: paramDef.name,
+                    labelPosition: 'left',
+                    labelWidth: '100px',
+                    labelAlign: 'right',
+                });
+            } else {
+                $paramInput.textbox({
+                    prompt: paramDef.desc,
+                    label: paramDef.name,
+                    labelPosition: 'left',
+                    labelWidth: '100px',
+                    labelAlign: 'right',
+                })
+            }
+        });
+    }
+
+    function getParamInputFromParamList(schema) {
+        if (!schema.paramDefines) {
+            consoleOutput('This Request Type dose not have required params');
+            return [];
+        }
+        let schemaName = schema.name;
+        let paramDefines = schema.paramDefines;
+        let paramValues = [];
+        paramDefines.forEach(paramDef => {
+            let inputId = schemaName + '_' + paramDef.name;
+            let $paramInput = $('#' + inputId);
+            let isComboBoxValue = !!paramDef.defineValues;
+            let value = isComboBoxValue
+                ? $paramInput.combobox('getValue')
+                : $paramInput.textbox('getValue');
+            let type = paramDef.type;
+            if (type === 'number') { // specific to number, just convert to Integer
+                value = Number.parseInt(value);
+            }
+            paramValues.push({name: paramDef.name, value: value});
+        });
+        return paramValues;
+    }
+
+    function schemaInvokeClick() {
+        let currentSchemaName = $('#schemaList').textbox('getValue');
+        if (!currentSchemaName || currentSchemaName.trim() === '') {
+            consoleOutput('Schema should not be EMPTY!');
+            return;
+        }
+        let schema = schemaList.find(s => s.name === currentSchemaName);
+        schema.paramValues = [];
+        let paramValues = getParamInputFromParamList(schema);
+        schemaInvoke(schema, paramValues);
+    }
+
+    function schemaInvoke(schema, paramValues) {
+        let data = {};
+        paramValues.forEach(obj => {
+            data[obj.name] = obj.value;
+        });
+        SchemaJs.invoke({
+            schemaName: schema.name,
+            data: data,
+            callback: successCallback,
+            beforeInvoke: function (e) {
+                consoleOutput('Before invoke: ' + e.finalUrl);
+            }
+        });
+    }
+
+    function successCallback(data) {
+
+    }
+
+    function consoleOutput(str, format = true) {
+        let output = format ? `${new Date()} : ${str}` : str;
+        let $consoleOutput = $('#consoleOutput');
+        let srcOutput = $consoleOutput.textbox('getValue');
+        $consoleOutput.textbox('setValue', srcOutput + '\r\n' + output);
+    }
+</script>
+</body>
+</html>
